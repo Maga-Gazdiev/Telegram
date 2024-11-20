@@ -78,10 +78,10 @@ return [
 
             'hosts' => [
                 [
-                    'host' => 'stage.s21o.in',
-                    'port' => 6902,
+                    'host' => env('RABBITMQ_PORT', 'stage.s21o.in'),
+                    'port' => env('RABBITMQ_PORT', 6901),
                     'username' => env('RABBITMQ_USERNAME', 'teleg-message-admin'),
-                    'password' => env('RABBITMQ_PASSWORD', 'your_password_here'),
+                    'password' => env('RABBITMQ_PASSWORD', 'eE?MpJYX@Dcop$_z8#%Mr^N^jL'),
                     'vhost' => env('RABBITMQ_VHOST', '/'),
                 ],
             ],

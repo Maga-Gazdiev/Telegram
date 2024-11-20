@@ -15,30 +15,20 @@ class SpamTelegramMessage
         $this->chatId = $chatId;
     }
 
-    public function choiceDataType($message){
-
-    }
-
     public function consumer($message)
     {
-        // Проверяем, откуда пришло сообщение (бот или группа)
         if (isset($message['callback_query'])) {
-            // Обрабатываем callback-запросы (кнопки)
             $this->buttons($message['callback_query']);
             return;
         }
 
-        // Определяем, что пришло - сообщение от пользователя или из группы
         if (isset($message['message'])) {
-            // Сообщение от пользователя
             $text = $message['message']['text'];
             $chatId = $message['message']['chat']['id'];
         } elseif (isset($message['channel_post'])) {
-            // Сообщение из канала/группы
             $text = $message['channel_post']['text'];
             $chatId = $message['channel_post']['chat']['id'];
         } else {
-            // Если данные не содержат ни message, ни channel_post
             return;
         }
 
@@ -55,7 +45,6 @@ class SpamTelegramMessage
                 $trimmedWord = trim($word);
 
                 if (stripos($text, $trimmedWord) !== false) {
-                    // Если слово найдено в тексте, отправляем сообщение
                     $this->sendTelegramMessage($message, $trimmedWord, $chatId);
                     return;
                 }
@@ -67,15 +56,14 @@ class SpamTelegramMessage
     {
         $url = "https://api.telegram.org/bot{$this->telegramToken}/sendMessage";
 
-        // Определяем текст для спам-сообщения
         $message = isset($originalMessage['message']) ? $originalMessage['message']['text'] : $originalMessage['channel_post']['text'];
-        $text = "Обнаружено спам-сообщение: \"$message\".\n\nСовпавшее слово: \"$matchedWord\".\n\nЧто вы хотите сделать?";
+        $text = "Это спам?: \"$message\"";
 
         $keyboard = [
             'inline_keyboard' => [
                 [
-                    ['text' => 'Удалить сообщение', 'callback_data' => 'delete_message_' . ($originalMessage['message']['message_id'] ?? $originalMessage['channel_post']['message_id'])],
-                    ['text' => 'Оставить сообщение', 'callback_data' => 'keep_message']
+                    ['text' => 'Спам', 'callback_data' => 'delete_message_' . ($originalMessage['message']['message_id'] ?? $originalMessage['channel_post']['message_id'])],
+                    ['text' => 'Не спам', 'callback_data' => 'keep_message']
                 ]
             ]
         ];
@@ -121,16 +109,52 @@ class SpamTelegramMessage
             $voteCount->execute([$messageId]);
             $votes = $voteCount->fetchColumn();
 
-            if ($votes >= 2) {
+            if ($votes > 1) {
+                $keyboard = [
+                    'inline_keyboard' => []
+                ];
+
+                $this->updateMessageButtons($chatId, $data["message"]["message_id"], $keyboard);
+                $this->deleteMessage($chatId, $data["message"]["message_id"]);
+
                 $this->deleteMessage($chatId, $messageId);
-                $this->sendConfirmationMessage($chatId, "Сообщение было удалено.");
             } else {
-                $this->sendConfirmationMessage($chatId, "Ваш голос принят. Ожидается ещё " . (2 - $votes) . " голос(а).");
+                $keyboard = [
+                    'inline_keyboard' => [
+                        [
+                            ['text' => 'Спам (' . $votes . ')', 'callback_data' => 'delete_message_' . $messageId],
+                            ['text' => 'Не спам', 'callback_data' => 'keep_message']
+                        ]
+                    ]
+                ];
+
+                $this->updateMessageButtons($chatId, $data["message"]["message_id"], $keyboard);
             }
         } elseif ($callbackData === "keep_message") {
-            //$this->sendConfirmationMessage($chatId, "Сообщение оставлено.");
+            // Дополнительная логика для оставления сообщения
         }
     }
+
+    private function updateMessageButtons($chatId, $messageId, $keyboard)
+    {
+        $url = "https://api.telegram.org/bot{$this->telegramToken}/editMessageReplyMarkup";
+
+        $data = [
+            'chat_id' => $chatId,
+            'message_id' => $messageId,
+            'reply_markup' => json_encode($keyboard)
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+        curl_exec($ch);
+        curl_close($ch);
+    }
+
 
     private function deleteMessage($chatId, $messageId)
     {

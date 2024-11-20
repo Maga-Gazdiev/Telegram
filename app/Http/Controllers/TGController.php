@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SendToRabbitMQ;
 use App\Services\SpamTelegramMessage;
 use Illuminate\Http\Request;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
@@ -12,7 +11,6 @@ class TGController extends Controller
 {
     public function index(Request $request)
     {
-        \Log::info($request->all());
         $connection = new AMQPStreamConnection(
             env('RABBITMQ_HOST'),
             env('RABBITMQ_PORT'),
@@ -55,7 +53,6 @@ class TGController extends Controller
             return;
         }
 
-        // Если тип сообщения неизвестен
         return response()->json(['error' => 'Invalid message type'], 400);
     }
 
